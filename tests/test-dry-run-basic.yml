@@ -1,0 +1,42 @@
+name: Test commit-check dry-run basic
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_REF: refs/heads/feat/add-new-feature
+      GITHUB_EVENT_NAME: push
+      GITHUB_TOKEN: ${{ github.token }}
+      GH_TOKEN: ${{ github.token }}
+      GITHUB_STEP_SUMMARY: /tmp/step-summary.md
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Configure git for commit-check
+        run: |
+          git config --global user.email "test@example.com"
+          git config --global user.name "Test User"
+          # Make a test commit so there is a HEAD commit to check
+          git commit --allow-empty -m "feat: add new feature"
+      - name: Mock gh CLI to bypass attestation verification under act
+        run: |
+          cat > /usr/local/bin/gh << 'GHEOF'
+          #!/bin/bash
+          # Mock gh: always succeed for attestation verify
+          exit 0
+          GHEOF
+          chmod +x /usr/local/bin/gh
+      - id: action
+        uses: .
+        with:
+          message: "true"
+          branch: "true"
+          author-name: "false"
+          author-email: "false"
+          dry-run: "true"
+          job-summary: "false"
+          pr-comments: "false"
+      - name: Assert action completed without error
+        run: |
+          echo "Action completed successfully in dry-run mode"
+          echo "PASS"
