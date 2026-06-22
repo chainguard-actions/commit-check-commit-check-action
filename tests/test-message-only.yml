@@ -1,0 +1,52 @@
+name: Test commit-check message-only mode
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_REF: refs/heads/main
+      GITHUB_EVENT_NAME: push
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Configure git with a conventional commit message
+        run: |
+          git config user.email "test@example.com"
+          git config user.name "Test User"
+          git commit --allow-empty -m "fix: correct a bug in the test suite"
+
+      - name: Mock gh CLI to bypass attestation verification
+        run: |
+          mkdir -p /tmp/mock-bin
+          cat > /tmp/mock-bin/gh << 'GHEOF'
+          #!/bin/bash
+          if [[ "$*" == *"attestation"* ]]; then
+            echo "Mocked: attestation verification passed"
+            exit 0
+          fi
+          if command -v /usr/bin/gh &>/dev/null; then
+            exec /usr/bin/gh "$@"
+          fi
+          exit 0
+          GHEOF
+          chmod +x /tmp/mock-bin/gh
+          echo "/tmp/mock-bin" >> $GITHUB_PATH
+
+      - id: action
+        uses: .
+        with:
+          message: "true"
+          branch: "false"
+          author-name: "false"
+          author-email: "false"
+          dry-run: "true"
+          job-summary: "false"
+          pr-comments: "false"
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Assert action completed for message-only check
+        run: |
+          echo "Action completed successfully for message-only check"
+          echo "PASS"
