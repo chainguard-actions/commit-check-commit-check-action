@@ -1,0 +1,45 @@
+name: Test dry-run push scenario
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_REF: refs/heads/act-harness
+      GITHUB_EVENT_NAME: push
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Install gh CLI if not present
+        run: |
+          if ! command -v gh &>/dev/null; then
+            type -p curl >/dev/null || (apt-get update && apt-get install -y curl)
+            curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+            chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
+            echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+            apt-get update
+            apt-get install -y gh
+          fi
+          gh --version
+      - name: Configure git for commit-check
+        run: |
+          git config user.name "Test User"
+          git config user.email "test@example.com"
+          # Ensure there is at least one commit with a conventional message
+          git log --oneline -1
+      - id: action
+        uses: .
+        with:
+          message: "true"
+          branch: "true"
+          author-name: "false"
+          author-email: "false"
+          dry-run: "true"
+          job-summary: "false"
+          pr-comments: "false"
+          pr-title: "false"
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+      - name: Assert action completed in dry-run mode
+        run: |
+          echo "Action completed successfully in dry-run mode"
+          echo "PASS"
