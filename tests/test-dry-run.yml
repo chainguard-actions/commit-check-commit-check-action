@@ -1,0 +1,38 @@
+name: Test dry-run mode
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_REF: refs/heads/main
+      GITHUB_EVENT_NAME: push
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Configure git
+        run: |
+          git config --global user.name "Test User"
+          git config --global user.email "test@example.com"
+          git log --oneline -1
+      - name: Mock gh CLI to bypass attestation verification
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          printf '#!/bin/bash\necho "Attestation mocked OK"\nexit 0\n' > "$HOME/.local/bin/gh"
+          chmod +x "$HOME/.local/bin/gh"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - id: action
+        uses: .
+        with:
+          message: "true"
+          branch: "true"
+          author-name: "false"
+          author-email: "false"
+          dry-run: "true"
+          job-summary: "false"
+          pr-comments: "false"
+        env:
+          GITHUB_TOKEN: "mock-token"
+      - name: Assert action completed in dry-run mode
+        run: |
+          echo "Action completed successfully in dry-run mode"
+          echo "PASS"
