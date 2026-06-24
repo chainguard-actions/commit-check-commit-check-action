@@ -1,18 +1,236 @@
-# commit-check/commit-check-action
+# Commit-Check GitHub Action
 
-Check commit message formatting, branch naming, committer name, email, and more
+[![Commit Check](https://img.shields.io/github/actions/workflow/status/commit-check/commit-check-action/commit-check.yml?branch=main&label=Commit%20Check&color=blue&logo=github)](https://github.com/commit-check/commit-check-action/actions/workflows/commit-check.yml)
+![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/commit-check/commit-check-action?color=blue)
+[![Used by](https://img.shields.io/static/v1?label=Used%20by&message=137&color=informational&logo=slickpic)](https://github.com/commit-check/commit-check-action/network/dependents)<!-- used by badge -->
+[![GitHub marketplace](https://img.shields.io/badge/Marketplace-commit--check--action-blue)](https://github.com/marketplace/actions/commit-check-action)
+[![slsa-badge](https://slsa.dev/images/gh-badge-level3.svg?color=blue)](https://github.com/commit-check/commit-check-action/blob/a2873ca0482dd505c93fb51861c953e82fd0a186/action.yml#L59-L69)
 
-Hardened by [Chainguard](https://www.chainguard.dev) from the upstream action at [https://github.com/commit-check/commit-check-action](https://github.com/commit-check/commit-check-action).
+A GitHub Action for checking commit message formatting, branch naming, committer name, email, commit signoff, and more.
 
-## Versions
+## What's New in v2
 
-| Version | Tag | Upstream commit |
-|---------|-----|-----------------|
-| v2.6.1 | [`v2.6.1`](https://github.com/chainguard-actions/commit-check-commit-check-action/tree/v2.6.1) | [`2239d89`](https://github.com/commit-check/commit-check-action/commit/2239d8980732e84a380552fdd71e1d49e149baf3) |
-| v2.7.0 | [`v2.7.0`](https://github.com/chainguard-actions/commit-check-commit-check-action/tree/v2.7.0) | [`f237ed0`](https://github.com/commit-check/commit-check-action/commit/f237ed0085f49444ab5c85bdfa5cdcd490fc09c5) |
-| v2.7.1 | [`v2.7.1`](https://github.com/chainguard-actions/commit-check-commit-check-action/tree/v2.7.1) | [`d044a00`](https://github.com/commit-check/commit-check-action/commit/d044a00d130bbff715282e16fb2b5ee8760b1afa) |
-| v2.8.0 | [`v2.8.0`](https://github.com/chainguard-actions/commit-check-commit-check-action/tree/v2.8.0) | [`c7245f6`](https://github.com/commit-check/commit-check-action/commit/c7245f6139b55db23f92266c2f0ff8429c64de80) |
-| v2.9.0 | [`v2.9.0`](https://github.com/chainguard-actions/commit-check-commit-check-action/tree/v2.9.0) | [`60e903b`](https://github.com/commit-check/commit-check-action/commit/60e903b3fb06f5e64580b959f58d5b9406a3e002) |
+> [!IMPORTANT]
+> This v2 release introduces several 🚨**breaking changes**. Please review the [Breaking Changes](#breaking-changes) section carefully before upgrading.
+
+### Breaking Changes
+
+- Removed support for `commit-signoff`, `merge-base`, and `imperative` inputs — now configured via `commit-check.toml` or `cchk.toml`.
+- Deprecated `.commit-check.yml` in favor of `commit-check.toml` or `cchk.toml`.
+- Changed default values of `author-name` and `author-email` inputs to `false` to align with the default behavior in commit-check.
+- Upgraded core dependency [`commit-check`](https://github.com/commit-check/commit-check) to [**v2.0.0**](https://github.com/commit-check/commit-check/releases/tag/v2.0.0).
+
+## Table of Contents
+
+* [Usage](#usage)
+* [Optional Inputs](#optional-inputs)
+* [GitHub Action Job Summary](#github-action-job-summary)
+* [GitHub Pull Request Comments](#github-pull-request-comments)
+* [Fork PR Comments](docs/fork-pr-comments.md)
+* [Badging Your Repository](#badging-your-repository)
+* [Versioning](#versioning)
+
+## Usage
+
+Create a new GitHub Actions workflow in your project, e.g. at [.github/workflows/commit-check.yml](.github/workflows/commit-check.yml)
+
+```yaml
+name: Commit Check
+
+on:
+  push:
+  pull_request:
+    branches: 'main'
+
+jobs:
+  commit-check:
+    runs-on: ubuntu-latest
+    permissions:  # use permissions because use of pr-comments
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0  # Required for merge-base checks
+      - uses: commit-check/commit-check-action@v2
+        with:
+          message: true
+          branch: true
+          author-name: false
+          author-email: false
+          job-summary: true
+          pr-comments: ${{ github.event_name == 'pull_request' }}
+```
+
+> [!NOTE]
+> This action supports running on Linux, macOS, and Windows (`ubuntu-latest`, `macos-latest`, `windows-latest`).
+
+## Used By
+
+<p align="center">
+  <a href="https://github.com/apache"><img src="https://avatars.githubusercontent.com/u/47359?s=200&v=4" alt="Apache" width="28"/></a>
+  <strong>Apache</strong>&nbsp;&nbsp;
+  <a href="https://github.com/discovery-unicamp"><img src="https://avatars.githubusercontent.com/u/112810766?s=200&v=4" alt="discovery-unicamp" width="28"/></a>
+  <strong>discovery-unicamp</strong>&nbsp;&nbsp;
+  <a href="https://github.com/TexasInstruments"><img src="https://avatars.githubusercontent.com/u/24322022?s=200&v=4" alt="Texas Instruments" width="28"/></a>
+  <strong>Texas Instruments</strong>&nbsp;&nbsp;
+  <a href="https://github.com/opencadc"><img src="https://avatars.githubusercontent.com/u/13909060?s=200&v=4" alt="OpenCADC" width="28"/></a>
+  <strong>OpenCADC</strong>&nbsp;&nbsp;
+  <a href="https://github.com/extrawest"><img src="https://avatars.githubusercontent.com/u/39154663?s=200&v=4" alt="Extrawest" width="28"/></a>
+  <strong>Extrawest</strong>
+  <a href="https://github.com/Chainlift"><img src="https://avatars.githubusercontent.com/u/204404276?s=200&v=4" alt="Chainlift" width="28"/></a>
+  <strong>Chainlift</strong>&nbsp;&nbsp;
+  <a href="https://github.com/mila-iqia"><img src="https://avatars.githubusercontent.com/u/11724251?s=200&v=4" alt="Mila" width="28"/></a>
+  <strong>Mila</strong>&nbsp;&nbsp;
+  <a href="https://github.com/RLinf/RLinf"><img src="https://avatars.githubusercontent.com/u/226440105?s=200&v=4" alt="RLinf" width="28"/></a>
+  <strong>RLinf</strong>&nbsp;&nbsp;
+  <strong> and <a href="https://github.com/commit-check/commit-check-action/network/dependents">many more</a>.</strong>
+</p>
+
+## Optional Inputs
+
+### `message`
+
+- **Description**: check git commit message following [Conventional Commits](https://www.conventionalcommits.org/).
+- Default: `true`
+
+### `branch`
+
+- **Description**: check git branch name following [Conventional Branch](https://conventional-branch.github.io/).
+- Default: `true`
+
+### `author-name`
+
+- **Description**: check committer author name.
+- Default: `false`
+
+### `author-email`
+
+- **Description**: check committer author email.
+- Default: `false`
+
+### `dry-run`
+
+- **Description**: run checks without failing. exit code is 0; otherwise is 1.
+- Default: `false`
+
+### `job-summary`
+
+- **Description**: display job summary to the workflow run.
+- Default: `true`
+
+### `pr-comments`
+
+- **Description**: post results to the pull request comments.
+- Default: `false`
+
+> [!NOTE]
+> `pr-comments` is disabled by default.
+>
+> PR comments are skipped for pull requests from forked repositories. See
+> [docs/fork-pr-comments.md](docs/fork-pr-comments.md) for details on how to enable
+> this feature for fork contributions.
+>
+> Note: write-access to pull-requests requires the `pull-requests: write` permission.
+> See [usage example](#usage).
+
+### `pr-title`
+
+- **Description**: check pull request title following [Conventional Commits](https://www.conventionalcommits.org/).
+- Default: `false`
+
+> [!TIP]
+> This is especially useful for teams using **Squash & Merge**, where the PR title
+> becomes the final commit message in the main branch. When enabled, the action
+> validates the PR title against your Conventional Commits configuration, giving
+> early feedback at PR time rather than after merge.
+>
+> `pr-title` works alongside `message` — you can enable both to validate the PR
+> title and individual commits, or just one depending on your workflow.
+>
+> This setting only applies to `pull_request` and `pull_request_target` events;
+> it is silently ignored on `push` events.
+
+> [!IMPORTANT]
+> By default, `pull_request` does **not** trigger on title changes.
+> To validate the PR title immediately when updated, add `edited` to your
+> workflow's event types:
+> ```yaml
+> on:
+>   pull_request:
+>     types: [opened, synchronize, reopened, edited]
+> ```
+> Without `edited`, only the initial title (at PR creation) is validated.
+
+Note: the default rule of above inputs is following [this configuration](https://github.com/commit-check/commit-check-action/blob/main/commit-check.toml). If you want to customize, just add your [`commit-check.toml`](https://commit-check.github.io/commit-check/configuration.html) config file under your repository root directory.
+
+## GitHub Action Job Summary
+
+By default, commit-check-action results are shown on the job summary page of the workflow.
+
+### Success Job Summary
+
+![Success job summary](https://github.com/commit-check/.github/blob/main/screenshot/success-job-summary.png)
+
+### Failure Job Summary
+
+![Failure job summary](https://github.com/commit-check/.github/blob/main/screenshot/failure-job-summary.png)
+
+## GitHub Pull Request Comments
+
+### Success Pull Request Comment
+
+![Success pull request comment](https://github.com/commit-check/.github/blob/main/screenshot/success-pr-comments.png)
+
+### Failure Pull Request Comment
+
+![Failure pull request comment](https://github.com/commit-check/.github/blob/main/screenshot/failure-pr-comments.png)
+
+## Fork PR Comments
+
+When a pull request is opened from a **forked repository**, the `GITHUB_TOKEN` used by the
+`pull_request` event has **read-only** permissions by design (GitHub security policy).
+This means `pr-comments: true` cannot write a comment back to the PR.
+
+By default, commit-check-action handles this gracefully:
+
+- PR comment writing is **skipped** with a `::warning::` message in the logs
+- A **notice is added to the Job Summary** explaining why and how to fix it
+- The commit checks themselves **still run normally**
+
+> **For most projects, this is sufficient** — contributors can see check results in the
+> action Job Summary. But if you *must* have PR comments on fork contributions, see
+> the **[Fork PR Comments](docs/fork-pr-comments.md)** documentation for
+> two recommended approaches with ready-to-use workflow examples.
+
+## Badging Your Repository
+
+You can add a badge to your repository to show your contributors/users that you use commit-check!
+
+[![Commit Check](https://github.com/commit-check/commit-check-action/actions/workflows/commit-check.yml/badge.svg)](https://github.com/commit-check/commit-check-action/actions/workflows/commit-check.yml)
+
+Markdown
+
+```
+[![Commit Check](https://github.com/commit-check/commit-check-action/actions/workflows/commit-check.yml/badge.svg)](https://github.com/commit-check/commit-check-action/actions/workflows/commit-check.yml)
+```
+
+reStructuredText
+
+```
+.. image:: https://github.com/commit-check/commit-check-action/actions/workflows/commit-check.yml/badge.svg
+    :target: https://github.com/commit-check/commit-check-action/actions/workflows/commit-check.yml
+    :alt: Commit Check
+```
+
+
+## Versioning
+
+Versioning follows [Semantic Versioning](https://semver.org/).
+
+## Have questions or feedback?
+
+To provide feedback (requesting a feature or reporting a bug), please post to [issues](https://github.com/commit-check/commit-check/issues).
 
 ## Privacy
 

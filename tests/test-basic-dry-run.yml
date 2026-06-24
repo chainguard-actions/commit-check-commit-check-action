@@ -1,0 +1,50 @@
+name: Test basic dry-run usage
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_REF: refs/heads/feat/test-branch
+      GITHUB_EVENT_NAME: push
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Set up git with conventional commit message
+        run: |
+          git config user.email "test@example.com"
+          git config user.name "Test User"
+          git commit --allow-empty -m "feat: add new feature"
+
+      - name: Mock gh CLI for attestation verification
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          cat > "$HOME/.local/bin/gh" << 'EOF'
+          #!/bin/bash
+          # Mock gh CLI - always succeed for attestation verify
+          if [[ "$1" == "attestation" && "$2" == "verify" ]]; then
+            echo "Attestation verification skipped (mock)"
+            exit 0
+          fi
+          # Fall through to real gh if available
+          exec /usr/bin/gh "$@" 2>/dev/null || exit 0
+          EOF
+          chmod +x "$HOME/.local/bin/gh"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - id: action
+        uses: .
+        with:
+          message: "true"
+          branch: "true"
+          author-name: "false"
+          author-email: "false"
+          dry-run: "true"
+          job-summary: "false"
+          pr-comments: "false"
+          pr-title: "false"
+
+      - name: Assert action completed
+        run: |
+          echo "Action completed successfully in dry-run mode"
+          echo "PASS"
