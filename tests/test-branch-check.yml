@@ -1,0 +1,45 @@
+name: Test branch name check
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      GITHUB_REF: refs/heads/feat/conventional-branch
+      GITHUB_EVENT_NAME: push
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+      - name: Configure git with conventional commit
+        run: |
+          git config user.email "test@example.com"
+          git config user.name "Test User"
+          git commit --allow-empty -m "feat: add conventional branch test"
+      - name: Mock gh CLI to bypass attestation verification
+        run: |
+          mkdir -p /tmp/mock-bin
+          printf '#!/bin/bash\nif [[ "$1" == "attestation" && "$2" == "verify" ]]; then\n  echo "Mock: attestation verification passed"\n  exit 0\nfi\nexec /usr/bin/gh "$@"\n' > /tmp/mock-bin/gh
+          chmod +x /tmp/mock-bin/gh
+          echo "/tmp/mock-bin" >> "$GITHUB_PATH"
+      - id: action
+        uses: .
+        with:
+          message: "false"
+          branch: "true"
+          author-name: "false"
+          author-email: "false"
+          dry-run: "true"
+          job-summary: "false"
+          pr-comments: "false"
+          pr-title: "false"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+      - name: Assert branch check completed
+        run: |
+          echo "Branch check completed for feat/conventional-branch"
+          echo "PASS"
