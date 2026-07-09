@@ -1,0 +1,47 @@
+name: Test basic push with dry-run
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_REF: refs/heads/main
+      GITHUB_EVENT_NAME: push
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install gh CLI if not present
+        run: |
+          if ! command -v gh &>/dev/null; then
+            type -p curl >/dev/null || (apt-get update && apt-get install -y curl)
+            curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+            chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
+            echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+            apt-get update
+            apt-get install -y gh
+          fi
+          gh --version
+
+      - name: Configure git with a valid conventional commit
+        run: |
+          git config user.email "test@example.com"
+          git config user.name "Test User"
+          # Make sure HEAD has a conventional commit message
+          git commit --allow-empty -m "feat: add basic test"
+
+      - id: action
+        uses: .
+        with:
+          message: "true"
+          branch: "true"
+          author-name: "false"
+          author-email: "false"
+          dry-run: "true"
+          job-summary: "false"
+          pr-comments: "false"
+          pr-title: "false"
+
+      - name: Assert action completed without error
+        run: |
+          echo "Action completed successfully in dry-run mode"
+          echo "PASS"
