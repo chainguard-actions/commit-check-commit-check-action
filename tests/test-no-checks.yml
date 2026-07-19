@@ -1,0 +1,35 @@
+name: Test with all checks disabled
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Install GitHub CLI
+        run: |
+          if ! command -v gh &>/dev/null; then
+            type -p curl >/dev/null || (apt-get update && apt-get install -y curl)
+            curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+            chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
+            echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+            apt-get update
+            apt-get install -y gh
+          fi
+          gh --version
+      - name: Run commit-check action with all checks disabled
+        id: action
+        uses: .
+        with:
+          message: "false"
+          branch: "false"
+          author-name: "false"
+          author-email: "false"
+          dry-run: "false"
+          job-summary: "false"
+          pr-comments: "false"
+          pr-title: "false"
+      - name: Assert action completed successfully with no checks
+        run: |
+          echo "Action completed with all checks disabled"
+          echo "PASS: action ran without error when no checks are enabled"

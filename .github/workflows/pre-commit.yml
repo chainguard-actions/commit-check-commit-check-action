@@ -9,4 +9,4 @@ on:
 
 jobs:
   pre-commit:
-    uses: commit-check/.github/.github/workflows/pre-commit.yml@4a68c86b2edf1d31c5752bfeaf66b5425df8352e # main
+    uses: commit-check/.github/.github/workflows/pre-commit.yml@fcbd5e3e6cd0c675d58191af2c27ed25ff04a274 # main
