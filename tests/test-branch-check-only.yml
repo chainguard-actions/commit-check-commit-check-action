@@ -1,4 +1,4 @@
-name: Test dry-run mode
+name: Test branch check only
 on:
   workflow_dispatch:
 jobs:
@@ -35,16 +35,16 @@ jobs:
       - id: action
         uses: .
         with:
-          message: "true"
+          message: "false"
           branch: "true"
-          author-name: "true"
-          author-email: "true"
+          author-name: "false"
+          author-email: "false"
           dry-run: "true"
           job-summary: "true"
           pr-comments: "false"
           pr-title: "false"
 
-      - name: Assert dry-run mode does not fail even with all checks enabled
+      - name: Assert branch check ran without fatal error
         run: |
-          echo "Action completed in dry-run mode with all checks enabled"
-          echo "PASS: dry-run prevented any check failures from causing exit code 1"
+          echo "Action completed with branch check only (dry-run enabled)"
+          echo "PASS"

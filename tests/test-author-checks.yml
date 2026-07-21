@@ -1,4 +1,4 @@
-name: Test dry-run mode
+name: Test author name and email checks
 on:
   workflow_dispatch:
 jobs:
@@ -9,7 +9,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Configure git user
+      - name: Configure git user with valid name and email
         run: |
           git config user.email "test@example.com"
           git config user.name "Test User"
@@ -35,8 +35,8 @@ jobs:
       - id: action
         uses: .
         with:
-          message: "true"
-          branch: "true"
+          message: "false"
+          branch: "false"
           author-name: "true"
           author-email: "true"
           dry-run: "true"
@@ -44,7 +44,7 @@ jobs:
           pr-comments: "false"
           pr-title: "false"
 
-      - name: Assert dry-run mode does not fail even with all checks enabled
+      - name: Assert author checks ran without fatal error
         run: |
-          echo "Action completed in dry-run mode with all checks enabled"
-          echo "PASS: dry-run prevented any check failures from causing exit code 1"
+          echo "Action completed with author name and email checks (dry-run enabled)"
+          echo "PASS"
