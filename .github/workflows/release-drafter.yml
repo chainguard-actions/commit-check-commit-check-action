@@ -1,0 +1,15 @@
+name: Release Drafter
+
+on:
+  push:
+    branches:
+      - "main"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  draft-release:
+    uses: commit-check/.github/.github/workflows/release-drafter.yml@2ba725751f2fe99f0679c168dcb9d1c75ff41138 # main
