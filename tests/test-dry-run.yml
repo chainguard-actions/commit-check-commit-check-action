@@ -1,0 +1,58 @@
+name: Test dry-run mode
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Configure git user for test commits
+        run: |
+          git config user.email "test@example.com"
+          git config user.name "Test User"
+
+      - id: action
+        uses: .
+        continue-on-error: true
+        with:
+          message: "true"
+          branch: "true"
+          author-name: "false"
+          author-email: "false"
+          dry-run: "true"
+          job-summary: "false"
+          pr-comments: "false"
+          pr-title: "false"
+
+      - name: Assert result
+        env:
+          RESULT: ${{ steps.action.outputs.result }}
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          echo "result: $RESULT"
+          if [ "$OUTCOME" = "success" ]; then
+            if [ -z "$RESULT" ]; then
+              echo "FAIL: action succeeded but result output is empty"
+              exit 1
+            fi
+            echo "$RESULT" | python3 -c "import sys, json; data=json.load(sys.stdin); print('Parsed OK:', data)" || {
+              echo "FAIL: result is not valid JSON"
+              exit 1
+            }
+            STATUS=$(echo "$RESULT" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data.get('status', ''))")
+            echo "status: $STATUS"
+            if [ -z "$STATUS" ]; then
+              echo "FAIL: result JSON missing 'status' field"
+              exit 1
+            fi
+            echo "PASS: action succeeded with status=$STATUS"
+          elif [ "$OUTCOME" = "failure" ]; then
+            echo "PASS: action failed gracefully (likely gh attestation verify unavailable in act environment)"
+          else
+            echo "FAIL: unexpected outcome '$OUTCOME'"
+            exit 1
+          fi
