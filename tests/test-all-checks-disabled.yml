@@ -1,4 +1,4 @@
-name: Test message check with dry-run
+name: Test all checks disabled
 on:
   workflow_dispatch:
 jobs:
@@ -27,19 +27,19 @@ jobs:
           gh --version
         env:
           GH_TOKEN: ${{ github.token }}
-      - name: Run commit-check action with message check only and dry-run
+      - name: Run commit-check action with all checks disabled
         id: action
         uses: .
         with:
-          message: "true"
+          message: "false"
           branch: "false"
           author-name: "false"
           author-email: "false"
-          dry-run: "true"
+          dry-run: "false"
           job-summary: "false"
           pr-comments: "false"
           pr-title: "false"
-      - name: Assert action completed successfully
+      - name: Assert action completed successfully with no checks
         run: |
-          echo "Action completed with message check enabled and dry-run=true"
-          echo "PASS: message check ran without failing the workflow"
+          echo "Action completed with all checks disabled"
+          echo "PASS: no checks ran, action exited cleanly"
