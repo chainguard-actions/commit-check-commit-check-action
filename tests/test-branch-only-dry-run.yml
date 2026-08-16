@@ -1,4 +1,4 @@
-name: Test dry-run mode
+name: Test branch check only with dry-run
 on:
   workflow_dispatch:
 jobs:
@@ -23,18 +23,18 @@ jobs:
             apt-get install gh -y
           fi
           gh --version
-      - name: Run commit-check with dry-run enabled
+      - name: Run commit-check with branch check only and dry-run enabled
         id: action
         uses: .
         with:
-          message: "true"
+          message: "false"
           branch: "true"
           author-name: "false"
           author-email: "false"
           dry-run: "true"
           job-summary: "true"
           pr-comments: "false"
-      - name: Assert action succeeded in dry-run mode
+      - name: Assert action succeeded in dry-run mode with branch check
         run: |
-          echo "Action completed successfully in dry-run mode"
-          echo "PASS: dry-run mode did not cause the action to fail"
+          echo "Action completed successfully in dry-run mode with branch check"
+          echo "PASS: branch check ran in dry-run mode without failing"

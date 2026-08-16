@@ -1,0 +1,12 @@
+name: Run pre-commit
+permissions:
+  contents: read
+
+on:
+  push:
+  pull_request:
+    types: opened
+
+jobs:
+  pre-commit:
+    uses: commit-check/.github/.github/workflows/pre-commit.yml@303c9315a9d8272aaf72bae4cac7c69da7263b1f # main
