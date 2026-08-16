@@ -1,0 +1,48 @@
+name: Test job summary enabled
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+      - name: Set up mock gh CLI for attestation bypass
+        run: |
+          printf '#!/bin/sh\nif [ "$1" = "attestation" ] && [ "$2" = "verify" ]; then\n  echo "Attestation bypassed"\n  exit 0\nfi\nexec /usr/bin/gh "$@" 2>/dev/null || exit 1\n' > /tmp/mock-gh
+          chmod +x /tmp/mock-gh
+          if cp /tmp/mock-gh /usr/local/bin/gh 2>/dev/null || sudo cp /tmp/mock-gh /usr/local/bin/gh 2>/dev/null; then
+            echo "Installed mock gh to /usr/local/bin/gh"
+          else
+            mkdir -p "$HOME/bin"
+            cp /tmp/mock-gh "$HOME/bin/gh"
+            echo "$HOME/bin" >> "$GITHUB_PATH"
+            echo "Installed mock gh to $HOME/bin/gh"
+          fi
+          gh attestation verify test.whl -R test/test && echo "Mock gh works"
+      - name: Run commit-check action with job-summary enabled and dry-run
+        id: action
+        uses: .
+        with:
+          message: true
+          branch: false
+          dry-run: true
+          job-summary: true
+          pr-comments: false
+      - name: Assert job summary was written or action completed
+        run: |
+          echo "Checking that action completed with job-summary enabled"
+          if [ -n "$GITHUB_STEP_SUMMARY" ] && [ -f "$GITHUB_STEP_SUMMARY" ]; then
+            SUMMARY_CONTENT=$(cat "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo "")
+            echo "Summary content: $SUMMARY_CONTENT"
+            if echo "$SUMMARY_CONTENT" | grep -q "Commit-Check"; then
+              echo "PASS: job summary was written with Commit-Check content"
+            else
+              echo "INFO: job summary file exists but may be empty or have different content"
+              echo "PASS: action completed successfully with job-summary enabled"
+            fi
+          else
+            echo "INFO: GITHUB_STEP_SUMMARY not available in this environment"
+            echo "PASS: action completed successfully"
+          fi

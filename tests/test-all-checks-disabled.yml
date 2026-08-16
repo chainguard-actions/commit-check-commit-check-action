@@ -1,0 +1,42 @@
+name: Test all checks disabled
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+      - name: Set up mock gh CLI for attestation bypass
+        run: |
+          printf '#!/bin/sh\nif [ "$1" = "attestation" ] && [ "$2" = "verify" ]; then\n  echo "Attestation bypassed"\n  exit 0\nfi\nexec /usr/bin/gh "$@" 2>/dev/null || exit 1\n' > /tmp/mock-gh
+          chmod +x /tmp/mock-gh
+          # Install to a directory that is early in PATH
+          # Try /usr/local/bin first (may need sudo), fall back to ~/bin
+          if cp /tmp/mock-gh /usr/local/bin/gh 2>/dev/null || sudo cp /tmp/mock-gh /usr/local/bin/gh 2>/dev/null; then
+            echo "Installed mock gh to /usr/local/bin/gh"
+          else
+            mkdir -p "$HOME/bin"
+            cp /tmp/mock-gh "$HOME/bin/gh"
+            export PATH="$HOME/bin:$PATH"
+            echo "Installed mock gh to $HOME/bin/gh"
+            echo "$HOME/bin" >> "$GITHUB_PATH"
+          fi
+          gh attestation verify test.whl -R test/test && echo "Mock gh works"
+      - name: Run commit-check action with all checks disabled
+        id: action
+        uses: .
+        with:
+          message: false
+          branch: false
+          author-name: false
+          author-email: false
+          dry-run: false
+          job-summary: false
+          pr-comments: false
+          pr-title: false
+      - name: Assert action completed successfully
+        run: |
+          echo "Action completed with all checks disabled"
+          echo "PASS: no checks ran, action exited 0 as expected"

@@ -1,0 +1,36 @@
+name: Test dry-run mode
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+      - name: Set up mock gh CLI for attestation bypass
+        run: |
+          printf '#!/bin/sh\nif [ "$1" = "attestation" ] && [ "$2" = "verify" ]; then\n  echo "Attestation bypassed"\n  exit 0\nfi\nexec /usr/bin/gh "$@" 2>/dev/null || exit 1\n' > /tmp/mock-gh
+          chmod +x /tmp/mock-gh
+          if cp /tmp/mock-gh /usr/local/bin/gh 2>/dev/null || sudo cp /tmp/mock-gh /usr/local/bin/gh 2>/dev/null; then
+            echo "Installed mock gh to /usr/local/bin/gh"
+          else
+            mkdir -p "$HOME/bin"
+            cp /tmp/mock-gh "$HOME/bin/gh"
+            echo "$HOME/bin" >> "$GITHUB_PATH"
+            echo "Installed mock gh to $HOME/bin/gh"
+          fi
+          gh attestation verify test.whl -R test/test && echo "Mock gh works"
+      - name: Run commit-check action in dry-run mode
+        id: action
+        uses: .
+        with:
+          message: true
+          branch: false
+          dry-run: true
+          job-summary: false
+          pr-comments: false
+      - name: Assert action completed successfully
+        run: |
+          echo "Action completed in dry-run mode"
+          echo "PASS: dry-run mode exited 0 as expected"

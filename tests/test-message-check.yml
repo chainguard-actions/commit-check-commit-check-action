@@ -1,0 +1,47 @@
+name: Test message check with conventional commit
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+      - name: Set up mock gh CLI for attestation bypass
+        run: |
+          printf '#!/bin/sh\nif [ "$1" = "attestation" ] && [ "$2" = "verify" ]; then\n  echo "Attestation bypassed"\n  exit 0\nfi\nexec /usr/bin/gh "$@" 2>/dev/null || exit 1\n' > /tmp/mock-gh
+          chmod +x /tmp/mock-gh
+          if cp /tmp/mock-gh /usr/local/bin/gh 2>/dev/null || sudo cp /tmp/mock-gh /usr/local/bin/gh 2>/dev/null; then
+            echo "Installed mock gh to /usr/local/bin/gh"
+          else
+            mkdir -p "$HOME/bin"
+            cp /tmp/mock-gh "$HOME/bin/gh"
+            echo "$HOME/bin" >> "$GITHUB_PATH"
+            echo "Installed mock gh to $HOME/bin/gh"
+          fi
+          gh attestation verify test.whl -R test/test && echo "Mock gh works"
+      - name: Configure git and create a conventional commit
+        run: |
+          git config user.email "test@example.com"
+          git config user.name "Test User"
+          # Create a real file change (allow_empty_commits = false in commit-check.toml)
+          echo "test content $(date)" > tests/test-commit-check-temp.txt
+          git add tests/test-commit-check-temp.txt
+          # Use a conventional commit message
+          git commit -m "feat: add test file for commit-check validation"
+      - name: Run commit-check with message check only (branch disabled to avoid act-harness branch name issue)
+        id: action
+        uses: .
+        with:
+          message: true
+          branch: false
+          author-name: false
+          author-email: false
+          dry-run: false
+          job-summary: false
+          pr-comments: false
+          pr-title: false
+      - name: Assert action passed with valid conventional commit
+        run: |
+          echo "PASS: commit-check passed with conventional commit message"

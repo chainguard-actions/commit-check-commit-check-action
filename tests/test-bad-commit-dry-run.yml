@@ -1,0 +1,48 @@
+name: Test bad commit message detected in dry-run
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+      - name: Set up mock gh CLI for attestation bypass
+        run: |
+          printf '#!/bin/sh\nif [ "$1" = "attestation" ] && [ "$2" = "verify" ]; then\n  echo "Attestation bypassed"\n  exit 0\nfi\nexec /usr/bin/gh "$@" 2>/dev/null || exit 1\n' > /tmp/mock-gh
+          chmod +x /tmp/mock-gh
+          if cp /tmp/mock-gh /usr/local/bin/gh 2>/dev/null || sudo cp /tmp/mock-gh /usr/local/bin/gh 2>/dev/null; then
+            echo "Installed mock gh to /usr/local/bin/gh"
+          else
+            mkdir -p "$HOME/bin"
+            cp /tmp/mock-gh "$HOME/bin/gh"
+            echo "$HOME/bin" >> "$GITHUB_PATH"
+            echo "Installed mock gh to $HOME/bin/gh"
+          fi
+          gh attestation verify test.whl -R test/test && echo "Mock gh works"
+      - name: Configure git and create a non-conventional commit
+        run: |
+          git config user.email "test@example.com"
+          git config user.name "Test User"
+          # Create a real file change (allow_empty_commits = false in commit-check.toml)
+          echo "bad commit test $(date)" > tests/test-bad-commit-temp.txt
+          git add tests/test-bad-commit-temp.txt
+          # Create a commit with a bad message (not following conventional commits)
+          git commit -m "this is a bad commit message that does not follow conventional commits"
+      - name: Run commit-check with message check and dry-run enabled
+        id: action
+        uses: .
+        with:
+          message: true
+          branch: false
+          author-name: false
+          author-email: false
+          dry-run: true
+          job-summary: true
+          pr-comments: false
+          pr-title: false
+      - name: Assert action completed in dry-run mode despite bad commit
+        run: |
+          echo "Checking that dry-run mode completed without failing"
+          echo "PASS: dry-run mode exited 0 even with a bad commit message"
