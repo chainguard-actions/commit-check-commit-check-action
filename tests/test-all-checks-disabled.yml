@@ -1,4 +1,4 @@
-name: Test dry-run mode
+name: Test all checks disabled
 on:
   workflow_dispatch:
 jobs:
@@ -16,18 +16,20 @@ jobs:
           /tmp/mock-bin/gh attestation verify test.whl -R test/repo
           echo "Mock gh installed successfully"
           echo "/tmp/mock-bin" >> "$GITHUB_PATH"
-      - name: Run commit-check action in dry-run mode
+      - name: Run commit-check action with all checks disabled
         id: action
         uses: .
         with:
-          message: "true"
-          branch: "true"
-          dry-run: "true"
+          message: "false"
+          branch: "false"
+          author-name: "false"
+          author-email: "false"
+          dry-run: "false"
           job-summary: "false"
           pr-comments: "false"
         env:
           GH_TOKEN: ${{ github.token }}
       - name: Assert action completed without failure
         run: |
-          echo "Action completed successfully in dry-run mode"
-          echo "PASS: dry-run mode did not cause the action to fail"
+          echo "Action completed successfully with all checks disabled"
+          echo "PASS: no checks ran, action exited cleanly"
