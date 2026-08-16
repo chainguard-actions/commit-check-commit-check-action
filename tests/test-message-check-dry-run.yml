@@ -1,0 +1,43 @@
+name: Test message check in dry-run mode
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Ensure gh CLI is installed and authenticated
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! command -v gh &>/dev/null; then
+            curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+            echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+            sudo apt-get update
+            sudo apt-get install gh -y
+          fi
+          gh auth status || echo "gh auth status check done"
+
+      - name: Run commit-check-action with message check only in dry-run mode
+        id: action
+        uses: .
+        env:
+          GH_TOKEN: ${{ github.token }}
+        with:
+          message: true
+          branch: false
+          author-name: false
+          author-email: false
+          dry-run: true
+          job-summary: false
+          pr-comments: false
+
+      - name: Assert action completed without failure
+        run: |
+          echo "Action completed successfully with message check in dry-run mode"
+          echo "PASS"
