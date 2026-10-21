@@ -1,0 +1,7 @@
+# Learn more: https://commit-check.com
+
+inherit_from = "github:commit-check/.github:commit-check.toml"
+
+[branch]
+require_rebase_target = "origin/main"
+allow_branch_names = ["create-pull-request/.+"]

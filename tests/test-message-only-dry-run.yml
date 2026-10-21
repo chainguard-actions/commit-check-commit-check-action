@@ -1,0 +1,71 @@
+name: Test message-only check in dry-run mode
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+      - name: Install GitHub CLI (required by the action for attestation verification)
+        run: |
+          if command -v gh >/dev/null 2>&1; then gh --version; exit 0; fi
+          GH_VERSION=2.62.0
+          case "$(uname -m)" in
+            x86_64|amd64) ARCH=amd64 ;;
+            aarch64|arm64) ARCH=arm64 ;;
+            *) echo "unsupported arch $(uname -m)"; exit 1 ;;
+          esac
+          DIR="${RUNNER_TEMP:-/tmp}/gh-cli"
+          mkdir -p "$DIR"
+          URL="https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_${ARCH}.tar.gz"
+          if command -v curl >/dev/null 2>&1; then
+            curl -fsSL -o "$DIR/gh.tar.gz" "$URL"
+          else
+            python3 -c "import sys,urllib.request; urllib.request.urlretrieve(sys.argv[1], sys.argv[2])" "$URL" "$DIR/gh.tar.gz"
+          fi
+          tar -xzf "$DIR/gh.tar.gz" -C "$DIR"
+          "$DIR/gh_${GH_VERSION}_linux_${ARCH}/bin/gh" --version
+          echo "$DIR/gh_${GH_VERSION}_linux_${ARCH}/bin" >> "$GITHUB_PATH"
+      - id: action
+        uses: .
+        with:
+          message: "true"
+          branch: "false"
+          dry-run: "true"
+      - name: Assert result has a single Commit message scope for HEAD
+        env:
+          RESULT: ${{ steps.action.outputs.result }}
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          echo "result: $RESULT"
+          if [ "$OUTCOME" != "success" ]; then
+            echo "FAIL: dry-run must always succeed"
+            exit 1
+          fi
+          export HEAD_SHA="$(git rev-parse HEAD)"
+          echo "HEAD: $HEAD_SHA"
+          python3 - <<'EOF'
+          import json, os, sys
+          data = json.loads(os.environ["RESULT"])
+          if data.get("status") not in ("pass", "fail", "warn", "skip"):
+              print(f"FAIL: unexpected status {data.get('status')}")
+              sys.exit(1)
+          scopes = data.get("scopes", [])
+          if len(scopes) != 1:
+              print(f"FAIL: expected exactly 1 scope, got {len(scopes)}")
+              sys.exit(1)
+          s = scopes[0]
+          if s.get("label") != "Commit message":
+              print(f"FAIL: expected label 'Commit message', got {s.get('label')}")
+              sys.exit(1)
+          if s.get("sha") != os.environ["HEAD_SHA"]:
+              print(f"FAIL: expected sha {os.environ['HEAD_SHA']}, got {s.get('sha')}")
+              sys.exit(1)
+          if s.get("status") not in ("pass", "fail", "warn", "skip"):
+              print(f"FAIL: unexpected scope status {s.get('status')}")
+              sys.exit(1)
+          print("PASS")
+          EOF
