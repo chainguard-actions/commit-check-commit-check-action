@@ -1,0 +1,58 @@
+name: Test dry-run reports failure but exits 0
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Install gh CLI (needed by the action's attestation check)
+        run: |
+          if command -v gh >/dev/null 2>&1; then gh --version; exit 0; fi
+          case "$(uname -m)" in
+            x86_64|amd64) ARCH=amd64 ;;
+            aarch64|arm64) ARCH=arm64 ;;
+            *) echo "unsupported arch $(uname -m)"; exit 1 ;;
+          esac
+          VER=2.65.0
+          URL="https://github.com/cli/cli/releases/download/v${VER}/gh_${VER}_linux_${ARCH}.tar.gz"
+          DEST="$RUNNER_TEMP/gh-cli"
+          mkdir -p "$DEST"
+          if command -v curl >/dev/null 2>&1; then
+            curl -sSfL "$URL" -o "$DEST/gh.tgz"
+          else
+            python3 -c "import urllib.request,sys; urllib.request.urlretrieve(sys.argv[1], sys.argv[2])" "$URL" "$DEST/gh.tgz"
+          fi
+          tar -xzf "$DEST/gh.tgz" -C "$DEST" --strip-components=1
+          "$DEST/bin/gh" --version
+          echo "$DEST/bin" >> "$GITHUB_PATH"
+      - name: Prepare deterministic config and bad commit
+        run: |
+          git config user.email "test@example.com"
+          git config user.name "Test User"
+          printf '# test config: use commit-check defaults\n' > commit-check.toml
+          printf '# test config: use commit-check defaults\n' > cchk.toml
+          git commit --allow-empty -m "this is a bad commit message"
+      - id: action
+        uses: .
+        with:
+          message: "true"
+          branch: "false"
+          dry-run: "true"
+      - name: Assert failure reported in result
+        env:
+          RESULT: ${{ steps.action.outputs.result }}
+        run: |
+          echo "result: $RESULT"
+          python3 - <<'EOF'
+          import json, os, sys
+          r = json.loads(os.environ["RESULT"])
+          if r["status"] not in ("fail", "warn"):
+              print("FAIL: expected status fail/warn, got", r["status"]); sys.exit(1)
+          scope = r["scopes"][0]
+          if scope["label"] != "Commit message" or scope["status"] not in ("fail", "warn"):
+              print("FAIL: unexpected scope", scope); sys.exit(1)
+          if not any(c.get("status") in ("fail", "warn") for c in scope["checks"]):
+              print("FAIL: expected a failing check"); sys.exit(1)
+          print("PASS")
+          EOF

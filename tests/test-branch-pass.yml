@@ -1,0 +1,54 @@
+name: Test conventional branch name passes
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Install gh CLI (needed by the action's attestation check)
+        run: |
+          if command -v gh >/dev/null 2>&1; then gh --version; exit 0; fi
+          case "$(uname -m)" in
+            x86_64|amd64) ARCH=amd64 ;;
+            aarch64|arm64) ARCH=arm64 ;;
+            *) echo "unsupported arch $(uname -m)"; exit 1 ;;
+          esac
+          VER=2.65.0
+          URL="https://github.com/cli/cli/releases/download/v${VER}/gh_${VER}_linux_${ARCH}.tar.gz"
+          DEST="$RUNNER_TEMP/gh-cli"
+          mkdir -p "$DEST"
+          if command -v curl >/dev/null 2>&1; then
+            curl -sSfL "$URL" -o "$DEST/gh.tgz"
+          else
+            python3 -c "import urllib.request,sys; urllib.request.urlretrieve(sys.argv[1], sys.argv[2])" "$URL" "$DEST/gh.tgz"
+          fi
+          tar -xzf "$DEST/gh.tgz" -C "$DEST" --strip-components=1
+          "$DEST/bin/gh" --version
+          echo "$DEST/bin" >> "$GITHUB_PATH"
+      - name: Prepare deterministic config and conventional branch
+        run: |
+          printf '# test config: use commit-check defaults\n' > commit-check.toml
+          printf '# test config: use commit-check defaults\n' > cchk.toml
+          git checkout -B feature/add-tests
+          git rev-parse --abbrev-ref HEAD
+      - id: action
+        uses: .
+        with:
+          message: "false"
+          branch: "true"
+      - name: Assert result
+        env:
+          RESULT: ${{ steps.action.outputs.result }}
+        run: |
+          echo "result: $RESULT"
+          python3 - <<'EOF'
+          import json, os, sys
+          r = json.loads(os.environ["RESULT"])
+          if r["status"] != "pass":
+              print("FAIL: expected status pass, got", r["status"]); sys.exit(1)
+          labels = [s["label"] for s in r["scopes"]]
+          if labels != ["Branch"]:
+              print("FAIL: unexpected scopes", labels); sys.exit(1)
+          print("PASS")
+          EOF
