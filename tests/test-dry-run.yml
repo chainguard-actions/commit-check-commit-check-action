@@ -1,0 +1,58 @@
+name: Test dry-run reports failures but exits 0
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Install gh CLI (needed for attestation verification)
+        run: |
+          if command -v gh >/dev/null 2>&1; then gh --version; exit 0; fi
+          case "$(uname -m)" in
+            x86_64|amd64) ARCH=amd64 ;;
+            aarch64|arm64) ARCH=arm64 ;;
+            *) echo "unsupported arch $(uname -m)"; exit 1 ;;
+          esac
+          VER=2.63.2
+          DEST="$RUNNER_TEMP/gh-cli"
+          mkdir -p "$DEST"
+          curl -fsSL "https://github.com/cli/cli/releases/download/v${VER}/gh_${VER}_linux_${ARCH}.tar.gz" -o "$DEST/gh.tar.gz"
+          tar -xzf "$DEST/gh.tar.gz" -C "$DEST"
+          echo "$DEST/gh_${VER}_linux_${ARCH}/bin" >> "$GITHUB_PATH"
+          "$DEST/gh_${VER}_linux_${ARCH}/bin/gh" --version
+      - name: Set up deterministic config and a bad commit
+        run: |
+          cat > commit-check.toml <<'EOF'
+          [commit]
+          conventional_commits = true
+          [branch]
+          conventional_branch = true
+          EOF
+          cp commit-check.toml cchk.toml
+          git config user.name "Test User"
+          git config user.email "test@example.com"
+          git commit --allow-empty -q -m "bad commit message without type"
+      - id: action
+        uses: .
+        with:
+          message: "true"
+          branch: "false"
+          dry-run: "true"
+      - name: Assert result reports fail despite success
+        env:
+          RESULT: ${{ steps.action.outputs.result }}
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          echo "result: $RESULT"
+          if [ "$OUTCOME" != "success" ]; then
+            echo "FAIL: dry-run should exit 0"; exit 1
+          fi
+          python3 - <<'PY'
+          import json, os
+          r = json.loads(os.environ["RESULT"])
+          assert r["status"] == "fail", f"status={r['status']}"
+          assert r["scopes"][0]["status"] == "fail"
+          print("PASS")
+          PY

@@ -1,0 +1,65 @@
+name: Test conventional commit message passes
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Install gh CLI (needed for attestation verification)
+        run: |
+          if command -v gh >/dev/null 2>&1; then gh --version; exit 0; fi
+          case "$(uname -m)" in
+            x86_64|amd64) ARCH=amd64 ;;
+            aarch64|arm64) ARCH=arm64 ;;
+            *) echo "unsupported arch $(uname -m)"; exit 1 ;;
+          esac
+          VER=2.63.2
+          DEST="$RUNNER_TEMP/gh-cli"
+          mkdir -p "$DEST"
+          curl -fsSL "https://github.com/cli/cli/releases/download/v${VER}/gh_${VER}_linux_${ARCH}.tar.gz" -o "$DEST/gh.tar.gz"
+          tar -xzf "$DEST/gh.tar.gz" -C "$DEST"
+          echo "$DEST/gh_${VER}_linux_${ARCH}/bin" >> "$GITHUB_PATH"
+          "$DEST/gh_${VER}_linux_${ARCH}/bin/gh" --version
+      - name: Set up deterministic config and a conventional commit
+        run: |
+          cat > commit-check.toml <<'EOF'
+          [commit]
+          conventional_commits = true
+          [branch]
+          conventional_branch = true
+          EOF
+          cp commit-check.toml cchk.toml
+          git config user.name "Test User"
+          git config user.email "test@example.com"
+          git commit --allow-empty -q -m "feat: add a conventional test commit"
+          git log -1 --format='%H %s'
+      - id: action
+        uses: .
+        with:
+          message: "true"
+          branch: "false"
+      - name: Assert result output
+        env:
+          RESULT: ${{ steps.action.outputs.result }}
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          echo "result: $RESULT"
+          if [ "$OUTCOME" != "success" ]; then
+            echo "FAIL: expected success"; exit 1
+          fi
+          HEAD_SHA="$(git rev-parse HEAD)"
+          export HEAD_SHA
+          python3 - <<'PY'
+          import json, os, sys
+          r = json.loads(os.environ["RESULT"])
+          assert r["status"] == "pass", f"status={r['status']}"
+          scopes = r["scopes"]
+          assert len(scopes) == 1, f"scopes={len(scopes)}"
+          s = scopes[0]
+          assert s["label"] == "Commit message", s["label"]
+          assert s["status"] == "pass", s["status"]
+          assert s["sha"] == os.environ["HEAD_SHA"], s["sha"]
+          print("PASS")
+          PY

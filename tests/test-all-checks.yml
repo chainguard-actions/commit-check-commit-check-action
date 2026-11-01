@@ -1,0 +1,65 @@
+name: Test all checks pass on conventional branch and commit
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Install gh CLI (needed for attestation verification)
+        run: |
+          if command -v gh >/dev/null 2>&1; then gh --version; exit 0; fi
+          case "$(uname -m)" in
+            x86_64|amd64) ARCH=amd64 ;;
+            aarch64|arm64) ARCH=arm64 ;;
+            *) echo "unsupported arch $(uname -m)"; exit 1 ;;
+          esac
+          VER=2.63.2
+          DEST="$RUNNER_TEMP/gh-cli"
+          mkdir -p "$DEST"
+          curl -fsSL "https://github.com/cli/cli/releases/download/v${VER}/gh_${VER}_linux_${ARCH}.tar.gz" -o "$DEST/gh.tar.gz"
+          tar -xzf "$DEST/gh.tar.gz" -C "$DEST"
+          echo "$DEST/gh_${VER}_linux_${ARCH}/bin" >> "$GITHUB_PATH"
+          "$DEST/gh_${VER}_linux_${ARCH}/bin/gh" --version
+      - name: Set up deterministic config, branch and commit
+        run: |
+          cat > commit-check.toml <<'EOF'
+          [commit]
+          conventional_commits = true
+          [branch]
+          conventional_branch = true
+          EOF
+          cp commit-check.toml cchk.toml
+          git config user.name "Test User"
+          git config user.email "test@example.com"
+          git checkout -q -b feature/add-tests
+          git commit --allow-empty -q -m "fix: correct a small bug"
+      - id: action
+        uses: .
+        with:
+          message: "true"
+          branch: "true"
+          author-name: "true"
+          author-email: "true"
+          job-summary: "true"
+      - name: Assert all scopes pass
+        env:
+          RESULT: ${{ steps.action.outputs.result }}
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          echo "result: $RESULT"
+          if [ "$OUTCOME" != "success" ]; then
+            echo "FAIL: expected success"; exit 1
+          fi
+          python3 - <<'PY'
+          import json, os
+          r = json.loads(os.environ["RESULT"])
+          assert r["status"] == "pass", f"status={r['status']}"
+          labels = [s["label"] for s in r["scopes"]]
+          expected = ["Commit message", "Branch", "Author name", "Author email"]
+          assert labels == expected, labels
+          for s in r["scopes"]:
+              assert s["status"] == "pass", (s["label"], s["status"])
+          print("PASS")
+          PY
