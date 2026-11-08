@@ -1,0 +1,56 @@
+name: Test author name and email checks
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+      - name: Ensure gh CLI is available
+        run: |
+          if command -v gh >/dev/null 2>&1; then gh --version; exit 0; fi
+          case "$(uname -m)" in
+            x86_64|amd64) ARCH=amd64 ;;
+            aarch64|arm64) ARCH=arm64 ;;
+            *) echo "unsupported arch"; exit 1 ;;
+          esac
+          V=2.63.0
+          curl -sSfL -o "$RUNNER_TEMP/gh.tar.gz" "https://github.com/cli/cli/releases/download/v${V}/gh_${V}_linux_${ARCH}.tar.gz"
+          tar -xzf "$RUNNER_TEMP/gh.tar.gz" -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/gh_${V}_linux_${ARCH}/bin" >> "$GITHUB_PATH"
+      - name: Create a commit with a known author
+        run: |
+          git config user.email "test@example.com"
+          git config user.name "Test User"
+          git commit --allow-empty -m "chore: test author checks"
+      - id: action
+        uses: .
+        with:
+          message: "false"
+          branch: "false"
+          author-name: "true"
+          author-email: "true"
+          dry-run: "true"
+      - name: Assert author scopes are reported
+        env:
+          RESULT: ${{ steps.action.outputs.result }}
+        run: |
+          echo "result: $RESULT"
+          python3 - <<'EOF'
+          import json, os, sys
+          data = json.loads(os.environ["RESULT"])
+          if data["status"] not in ("pass", "warn", "skip", "fail"):
+              sys.exit(f"FAIL: unexpected status {data['status']}")
+          labels = [s["label"] for s in data["scopes"]]
+          if labels != ["Author name", "Author email"]:
+              sys.exit(f"FAIL: expected ['Author name', 'Author email'], got {labels}")
+          for s in data["scopes"]:
+              if s["sha"] != "":
+                  sys.exit(f"FAIL: author scope should have no sha, got {s['sha']}")
+          print("PASS")
+          EOF
