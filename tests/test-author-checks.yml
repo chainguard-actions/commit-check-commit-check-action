@@ -1,0 +1,56 @@
+name: Test author name and email checks
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+      - name: Ensure a recent gh CLI is available
+        run: |
+          GH_VERSION=2.63.2
+          case "$(uname -m)" in
+            x86_64|amd64) ARCH=amd64 ;;
+            aarch64|arm64) ARCH=arm64 ;;
+            *) ARCH=amd64 ;;
+          esac
+          curl -fsSL "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_${ARCH}.tar.gz" -o /tmp/gh.tgz
+          tar -xzf /tmp/gh.tgz -C /tmp
+          mkdir -p "$RUNNER_TEMP/ghbin"
+          cp "/tmp/gh_${GH_VERSION}_linux_${ARCH}/bin/gh" "$RUNNER_TEMP/ghbin/gh"
+          echo "$RUNNER_TEMP/ghbin" >> "$GITHUB_PATH"
+      - name: Prepare a commit with a known author
+        run: |
+          git config user.name "Test User"
+          git config user.email "test@example.com"
+          rm -f commit-check.toml cchk.toml .github/commit-check.toml .github/cchk.toml
+          git commit --allow-empty -m "feat: add author test commit"
+      - id: action
+        uses: .
+        with:
+          message: false
+          branch: false
+          author-name: true
+          author-email: true
+      - name: Assert author scopes pass
+        env:
+          RESULT: ${{ steps.action.outputs.result }}
+        run: |
+          echo "result: $RESULT"
+          python3 - <<'EOF'
+          import json, os, sys
+          raw = os.environ.get("RESULT", "")
+          if not raw.strip():
+              print("FAIL: result output is empty"); sys.exit(1)
+          data = json.loads(raw)
+          if data.get("status") != "pass":
+              print(f"FAIL: expected status pass, got {data.get('status')}"); sys.exit(1)
+          labels = sorted(s["label"] for s in data["scopes"])
+          print("labels:", labels)
+          if labels != ["Author email", "Author name"]:
+              print("FAIL: expected exactly Author name and Author email scopes"); sys.exit(1)
+          print("PASS")
+          EOF
