@@ -1,0 +1,52 @@
+name: Test commit message check (dry run)
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+      - name: Install gh CLI (needed for attestation verification)
+        run: |
+          if command -v gh >/dev/null 2>&1; then gh --version; exit 0; fi
+          GH_VERSION=2.63.2
+          curl -fsSL -o "$RUNNER_TEMP/gh.tar.gz" "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_amd64.tar.gz"
+          mkdir -p "$RUNNER_TEMP/gh-cli"
+          tar -xzf "$RUNNER_TEMP/gh.tar.gz" -C "$RUNNER_TEMP/gh-cli" --strip-components=1
+          rm -f "$RUNNER_TEMP/gh.tar.gz"
+          echo "$RUNNER_TEMP/gh-cli/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/gh-cli/bin/gh" --version
+      - id: action
+        uses: .
+        with:
+          message: "true"
+          branch: "false"
+          dry-run: "true"
+      - name: Assert result contains a Commit message scope for HEAD
+        env:
+          RESULT: ${{ steps.action.outputs.result }}
+        run: |
+          echo "result: $RESULT"
+          HEAD_SHA="$(git rev-parse HEAD)"
+          export HEAD_SHA
+          python3 - <<'EOF'
+          import json, os, sys
+          data = json.loads(os.environ["RESULT"])
+          if data.get("status") not in ("pass", "fail", "warn", "skip"):
+              print(f"FAIL: unexpected status {data.get('status')}")
+              sys.exit(1)
+          labels = [s["label"] for s in data["scopes"]]
+          if labels != ["Commit message"]:
+              print(f"FAIL: expected only 'Commit message' scope, got {labels}")
+              sys.exit(1)
+          scope = data["scopes"][0]
+          if scope["sha"] != os.environ["HEAD_SHA"]:
+              print(f"FAIL: expected sha {os.environ['HEAD_SHA']}, got {scope['sha']}")
+              sys.exit(1)
+          print("PASS")
+          EOF
