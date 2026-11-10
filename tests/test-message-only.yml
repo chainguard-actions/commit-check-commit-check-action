@@ -1,0 +1,58 @@
+name: Test message check only (branch disabled, no job summary)
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+      - name: Ensure gh CLI with attestation support is available
+        run: |
+          if ! gh attestation --help >/dev/null 2>&1; then
+            case "$(uname -m)" in
+              x86_64) A=amd64 ;;
+              aarch64|arm64) A=arm64 ;;
+              *) A=amd64 ;;
+            esac
+            V=2.63.2
+            curl -fsSL -o /tmp/gh.tgz "https://github.com/cli/cli/releases/download/v${V}/gh_${V}_linux_${A}.tar.gz"
+            tar -xzf /tmp/gh.tgz -C /tmp
+            mkdir -p "$HOME/.local/gh-bin"
+            cp "/tmp/gh_${V}_linux_${A}/bin/gh" "$HOME/.local/gh-bin/gh"
+            echo "$HOME/.local/gh-bin" >> "$GITHUB_PATH"
+          fi
+      - id: action
+        uses: .
+        with:
+          message: "true"
+          branch: "false"
+          job-summary: "false"
+          dry-run: "true"
+      - name: Assert single commit message scope for HEAD
+        env:
+          RESULT: ${{ steps.action.outputs.result }}
+        run: |
+          echo "result: $RESULT"
+          HEAD_SHA="$(git rev-parse HEAD)"
+          echo "HEAD: $HEAD_SHA"
+          export HEAD_SHA
+          python3 - <<'EOF'
+          import json, os, sys
+          data = json.loads(os.environ["RESULT"])
+          scopes = data.get("scopes", [])
+          if len(scopes) != 1:
+              print("FAIL: expected exactly 1 scope, got", len(scopes)); sys.exit(1)
+          s = scopes[0]
+          if s["label"] != "Commit message":
+              print("FAIL: expected label 'Commit message', got", s["label"]); sys.exit(1)
+          if s["sha"] != os.environ["HEAD_SHA"]:
+              print("FAIL: expected sha", os.environ["HEAD_SHA"], "got", s["sha"]); sys.exit(1)
+          if data["status"] != s["status"]:
+              print("FAIL: overall status should equal the single scope status"); sys.exit(1)
+          print("PASS")
+          EOF

@@ -1,0 +1,60 @@
+name: Test pr-comments and pr-title on a non-PR event are skipped
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+      - name: Ensure gh CLI with attestation support is available
+        run: |
+          if ! gh attestation --help >/dev/null 2>&1; then
+            case "$(uname -m)" in
+              x86_64) A=amd64 ;;
+              aarch64|arm64) A=arm64 ;;
+              *) A=amd64 ;;
+            esac
+            V=2.63.2
+            curl -fsSL -o /tmp/gh.tgz "https://github.com/cli/cli/releases/download/v${V}/gh_${V}_linux_${A}.tar.gz"
+            tar -xzf /tmp/gh.tgz -C /tmp
+            mkdir -p "$HOME/.local/gh-bin"
+            cp "/tmp/gh_${V}_linux_${A}/bin/gh" "$HOME/.local/gh-bin/gh"
+            echo "$HOME/.local/gh-bin" >> "$GITHUB_PATH"
+          fi
+      - id: action
+        uses: .
+        with:
+          message: "false"
+          branch: "true"
+          pr-comments: "true"
+          pr-title: "true"
+          pr-body-ai-attribution: "true"
+          ai-label: "true"
+          dry-run: "true"
+      - name: Assert only the branch scope ran (PR scopes skipped outside a PR)
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+          RESULT: ${{ steps.action.outputs.result }}
+        run: |
+          echo "outcome: $OUTCOME"
+          echo "result: $RESULT"
+          if [ "$OUTCOME" != "success" ]; then
+            echo "FAIL: expected success"
+            exit 1
+          fi
+          python3 - <<'EOF'
+          import json, os, sys
+          data = json.loads(os.environ["RESULT"])
+          labels = [s["label"] for s in data.get("scopes", [])]
+          print("labels:", labels)
+          if labels != ["Branch"]:
+              print("FAIL: expected only ['Branch']"); sys.exit(1)
+          if data.get("ai_tools") != []:
+              print("FAIL: expected no ai_tools outside a PR"); sys.exit(1)
+          print("PASS")
+          EOF
