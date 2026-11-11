@@ -1,0 +1,73 @@
+name: Test dry-run with default checks
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+      - name: Install gh CLI (the act image does not ship it; hosted runners do)
+        run: |
+          set -e
+          if command -v gh >/dev/null 2>&1; then gh --version; exit 0; fi
+          case "$(uname -m)" in
+            x86_64|amd64) ARCH=amd64 ;;
+            aarch64|arm64) ARCH=arm64 ;;
+            *) echo "unsupported arch $(uname -m)"; exit 1 ;;
+          esac
+          TAG="$(curl -fsSLI -o /dev/null -w '%{url_effective}' https://github.com/cli/cli/releases/latest | sed 's#.*/tag/##')"
+          case "$TAG" in v[0-9]*) ;; *) TAG=v2.63.2 ;; esac
+          VER="${TAG#v}"
+          DEST="$RUNNER_TEMP/gh-cli"
+          mkdir -p "$DEST"
+          curl -fsSL "https://github.com/cli/cli/releases/download/${TAG}/gh_${VER}_linux_${ARCH}.tar.gz" -o "$DEST/gh.tar.gz"
+          tar -xzf "$DEST/gh.tar.gz" -C "$DEST"
+          echo "$DEST/gh_${VER}_linux_${ARCH}/bin" >> "$GITHUB_PATH"
+          "$DEST/gh_${VER}_linux_${ARCH}/bin/gh" --version
+      - id: action
+        uses: .
+        with:
+          dry-run: true
+      - name: Assert result output structure
+        env:
+          RESULT: ${{ steps.action.outputs.result }}
+        run: |
+          echo "result: $RESULT"
+          if [ -z "$RESULT" ]; then
+            echo "FAIL: result output is empty"
+            exit 1
+          fi
+          python3 - <<'EOF'
+          import json, os, sys
+          data = json.loads(os.environ["RESULT"])
+          status = data.get("status")
+          if status not in ("pass", "fail", "warn", "skip"):
+              print(f"FAIL: unexpected status {status!r}"); sys.exit(1)
+          labels = [s["label"] for s in data.get("scopes", [])]
+          print("labels:", labels)
+          if "Commit message" not in labels:
+              print("FAIL: missing 'Commit message' scope"); sys.exit(1)
+          if "Branch" not in labels:
+              print("FAIL: missing 'Branch' scope"); sys.exit(1)
+          msg = next(s for s in data["scopes"] if s["label"] == "Commit message")
+          if len(msg.get("sha") or "") != 40:
+              print(f"FAIL: commit message scope sha not a full hash: {msg.get('sha')!r}"); sys.exit(1)
+          print("PASS")
+          EOF
+      - name: Assert sha matches HEAD
+        env:
+          RESULT: ${{ steps.action.outputs.result }}
+        run: |
+          HEAD_SHA="$(git rev-parse HEAD)"
+          SHA="$(python3 -c 'import json,os; d=json.loads(os.environ["RESULT"]); print(next(s["sha"] for s in d["scopes"] if s["label"]=="Commit message"))')"
+          echo "head: $HEAD_SHA scope sha: $SHA"
+          if [ "$SHA" != "$HEAD_SHA" ]; then
+            echo "FAIL: sha mismatch"
+            exit 1
+          fi
+          echo "PASS"

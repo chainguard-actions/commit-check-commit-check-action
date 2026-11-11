@@ -1,0 +1,58 @@
+name: Test message AI attribution only
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+      - name: Install gh CLI (the act image does not ship it; hosted runners do)
+        run: |
+          set -e
+          if command -v gh >/dev/null 2>&1; then gh --version; exit 0; fi
+          case "$(uname -m)" in
+            x86_64|amd64) ARCH=amd64 ;;
+            aarch64|arm64) ARCH=arm64 ;;
+            *) echo "unsupported arch $(uname -m)"; exit 1 ;;
+          esac
+          TAG="$(curl -fsSLI -o /dev/null -w '%{url_effective}' https://github.com/cli/cli/releases/latest | sed 's#.*/tag/##')"
+          case "$TAG" in v[0-9]*) ;; *) TAG=v2.63.2 ;; esac
+          VER="${TAG#v}"
+          DEST="$RUNNER_TEMP/gh-cli"
+          mkdir -p "$DEST"
+          curl -fsSL "https://github.com/cli/cli/releases/download/${TAG}/gh_${VER}_linux_${ARCH}.tar.gz" -o "$DEST/gh.tar.gz"
+          tar -xzf "$DEST/gh.tar.gz" -C "$DEST"
+          echo "$DEST/gh_${VER}_linux_${ARCH}/bin" >> "$GITHUB_PATH"
+          "$DEST/gh_${VER}_linux_${ARCH}/bin/gh" --version
+      - id: action
+        uses: .
+        with:
+          message: false
+          branch: false
+          message-ai-attribution: true
+          dry-run: true
+      - name: Assert only AI rules were reported
+        env:
+          RESULT: ${{ steps.action.outputs.result }}
+        run: |
+          echo "result: $RESULT"
+          python3 - <<'EOF'
+          import json, os, sys
+          data = json.loads(os.environ["RESULT"])
+          scopes = data.get("scopes", [])
+          labels = [s["label"] for s in scopes]
+          print("labels:", labels)
+          if labels != ["Commit message"]:
+              print("FAIL: expected a single 'Commit message' scope"); sys.exit(1)
+          ai = {"CC013", "CC014", "CC015", "CC016", "CC017"}
+          checks = scopes[0].get("checks") or []
+          bad = [c.get("rule_id") for c in checks if c.get("rule_id") not in ai]
+          if bad:
+              print(f"FAIL: non-AI rules reported: {bad}"); sys.exit(1)
+          print("PASS")
+          EOF
