@@ -1,0 +1,56 @@
+name: Test basic usage with defaults (dry-run)
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+      - name: Ensure gh CLI is available
+        run: |
+          if command -v gh >/dev/null 2>&1; then gh --version; exit 0; fi
+          ver=2.63.2
+          case "$(uname -m)" in
+            x86_64) arch=amd64 ;;
+            aarch64|arm64) arch=arm64 ;;
+            *) arch=amd64 ;;
+          esac
+          curl -sSfL "https://github.com/cli/cli/releases/download/v${ver}/gh_${ver}_linux_${arch}.tar.gz" -o /tmp/gh.tgz
+          mkdir -p /tmp/gh && tar -xzf /tmp/gh.tgz -C /tmp/gh --strip-components=1
+          echo "/tmp/gh/bin" >> "$GITHUB_PATH"
+      - id: action
+        uses: .
+        with:
+          dry-run: "true"
+      - name: Assert result output is valid JSON with message and branch scopes
+        env:
+          RESULT: ${{ steps.action.outputs.result }}
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          echo "result: $RESULT"
+          if [ "$OUTCOME" != "success" ]; then
+            echo "FAIL: dry-run must always succeed"
+            exit 1
+          fi
+          python3 - <<'EOF'
+          import json, os, sys
+          data = json.loads(os.environ["RESULT"])
+          status = data.get("status")
+          if status not in ("pass", "warn", "skip", "fail"):
+              print(f"FAIL: unexpected status {status!r}"); sys.exit(1)
+          labels = [s["label"] for s in data.get("scopes", [])]
+          print("labels:", labels)
+          if "Commit message" not in labels:
+              print("FAIL: missing 'Commit message' scope"); sys.exit(1)
+          if "Branch" not in labels:
+              print("FAIL: missing 'Branch' scope"); sys.exit(1)
+          if "Author name" in labels or "Author email" in labels:
+              print("FAIL: author checks are off by default"); sys.exit(1)
+          print("PASS")
+          EOF
