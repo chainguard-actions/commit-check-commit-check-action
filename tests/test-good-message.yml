@@ -1,0 +1,56 @@
+name: Test conventional commit message passes
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+      - name: Check prerequisites
+        id: prereq
+        run: |
+          if python3 -I -c 'import sys; sys.exit(sys.version_info < (3, 11))' 2>/dev/null; then
+            echo "python-ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "python-ok=false" >> "$GITHUB_OUTPUT"
+          fi
+          if ! command -v gh >/dev/null 2>&1; then
+            ARCH=amd64
+            [ "$(uname -m)" = "aarch64" ] && ARCH=arm64
+            V=2.63.2
+            curl -fsSL -o "$RUNNER_TEMP/gh.tgz" "https://github.com/cli/cli/releases/download/v${V}/gh_${V}_linux_${ARCH}.tar.gz"
+            tar -xzf "$RUNNER_TEMP/gh.tgz" -C "$RUNNER_TEMP"
+            echo "$RUNNER_TEMP/gh_${V}_linux_${ARCH}/bin" >> "$GITHUB_PATH"
+          fi
+      - if: steps.prereq.outputs.python-ok != 'true'
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+      - name: Create a commit with a conventional message
+        run: |
+          git config user.email "test@example.com"
+          git config user.name "Test User"
+          git commit --allow-empty -m "fix: correct the widget layout"
+      - id: action
+        uses: .
+        with:
+          message: "true"
+          branch: "false"
+          job-summary: "false"
+      - name: Assert status is not fail
+        env:
+          RESULT: ${{ steps.action.outputs.result }}
+        run: |
+          echo "result: $RESULT"
+          if [ -z "$RESULT" ]; then
+            echo "FAIL: result output is empty"
+            exit 1
+          fi
+          STATUS=$(printf '%s' "$RESULT" | python3 -c 'import sys,json; print(json.load(sys.stdin)["status"])')
+          echo "status: $STATUS"
+          case "$STATUS" in
+            pass|warn) echo "PASS" ;;
+            *) echo "FAIL: expected pass/warn, got '$STATUS'"; exit 1 ;;
+          esac
