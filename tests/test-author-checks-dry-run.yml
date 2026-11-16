@@ -1,0 +1,72 @@
+name: Test author name/email checks with dry-run
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+      - name: Ensure Python 3.11+ and gh CLI are available
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! python3 -I -c 'import sys; sys.exit(sys.version_info < (3, 11))' 2>/dev/null; then
+            echo "Installing Python 3.12 via uv"
+            curl -LsSf https://astral.sh/uv/install.sh -o /tmp/uv-install.sh
+            UV_INSTALL_DIR="$HOME/.uvbin" sh /tmp/uv-install.sh
+            "$HOME/.uvbin/uv" python install 3.12
+            PY="$("$HOME/.uvbin/uv" python find 3.12)"
+            mkdir -p "$HOME/pybin"
+            ln -sf "$PY" "$HOME/pybin/python3"
+            ln -sf "$PY" "$HOME/pybin/python"
+            echo "$HOME/pybin" >> "$GITHUB_PATH"
+          fi
+          if ! command -v gh >/dev/null 2>&1; then
+            echo "Installing gh CLI"
+            case "$(uname -m)" in
+              x86_64) ARCH=amd64 ;;
+              aarch64|arm64) ARCH=arm64 ;;
+              *) ARCH=amd64 ;;
+            esac
+            V=2.63.2
+            curl -fsSL "https://github.com/cli/cli/releases/download/v${V}/gh_${V}_linux_${ARCH}.tar.gz" -o /tmp/gh.tgz
+            mkdir -p "$HOME/ghcli"
+            tar -xzf /tmp/gh.tgz -C "$HOME/ghcli" --strip-components=1
+            echo "$HOME/ghcli/bin" >> "$GITHUB_PATH"
+          fi
+      - id: action
+        uses: .
+        with:
+          message: false
+          branch: false
+          author-name: true
+          author-email: true
+          dry-run: true
+      - name: Assert author checks produced a structured result
+        env:
+          RESULT: ${{ steps.action.outputs.result }}
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          echo "result: $RESULT"
+          if [ "$OUTCOME" != "success" ]; then
+            echo "FAIL: dry-run must always exit 0"
+            exit 1
+          fi
+          if [ -z "$RESULT" ]; then
+            echo "FAIL: result output is empty"
+            exit 1
+          fi
+          printf '%s' "$RESULT" | python3 -c '
+          import json, sys
+          d = json.load(sys.stdin)
+          status = d.get("status")
+          print("status:", status)
+          assert status in ("pass", "warn", "skip", "fail"), "unexpected status %r" % status
+          scopes = d.get("scopes")
+          assert isinstance(scopes, list), "scopes missing"
+          print("scopes:", [s.get("label") for s in scopes])
+          ' || { echo "FAIL: invalid result JSON"; exit 1; }
+          echo "PASS"
