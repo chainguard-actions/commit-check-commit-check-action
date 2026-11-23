@@ -1,6 +1,11 @@
 {
   "owner": "commit-check",
   "repo": "commit-check-action",
-  "version": "",
-  "url": "https://github.com/commit-check/commit-check-action"
+  "version": "v2.25.0",
+  "commit_sha": "b42dca628bf1212c292cfb18a13dcf9bef2ce6e2",
+  "url": "https://github.com/commit-check/commit-check-action",
+  "policy_sha": "374911c4be584df24e6da57af2d990570ef0f859",
+  "test_policy_sha": "843adf9e4b8f85d0c08b27b9d0b09dd094b54702",
+  "test_agent_version": "2",
+  "harden_agent_version": "2"
 }
